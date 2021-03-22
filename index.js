@@ -22,6 +22,18 @@ special['while'] = (args, env) => {
         evaluate(args[1], env);
     }
 }
+special['if'] = (args, env) => {
+    if (args.length !== 2 && args.length !== 3) {
+        throw new SyntaxError();
+    }
+    const [condition, ifDo, elseDo] = args;
+    const value = evaluate(condition, env);
+    if (value) {
+        evaluate(ifDo, env);
+    } else if (elseDo) {
+        evaluate(elseDo, env);
+    }
+}
 
 const stringRegex = /^"([^"]*)"/;
 const numberRegex = /^\d+/;
@@ -84,6 +96,7 @@ function parseApply(expr, rest) {
             if (rest[0] === ',') {
                 rest = removeWhitespace(rest.slice(1));
             } else if (rest[0] !== ')') {
+                console.log(rest);
                 throw new SyntaxError();
             }
         }
@@ -113,6 +126,7 @@ function evaluate(expression, env) {
                 throw new TypeError();
             }
             return op.apply(null, expression.args.map(arg => evaluate(arg, env)));
+            break;
     }
 }
 
@@ -152,4 +166,10 @@ while(<=(i, 5), {
   print(str)
   put(i, +(i, 1))
 })
+`);
+
+run(`
+if(<=(1,0), { print("1<=0") })
+if(<=(0,1), { print("0<=1") })
+if(<=(1,0), { print("haha") }, { print("hoho") })
 `);
