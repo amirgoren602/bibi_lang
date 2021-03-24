@@ -36,8 +36,10 @@ special['if'] = (args, env) => {
 }
 
 special['func'] = (args, env) => {
-    const newEnv = Object.create(env);
-    env[args[0].name] = () => evaluate(args[1], newEnv);
+    env[args[0].name] = () => {
+        const newEnv = Object.create(env);
+        evaluate(args[1], newEnv);
+    }
 }
 
 const stringRegex = /^"([^"]*)"/;
