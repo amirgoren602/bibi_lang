@@ -35,6 +35,11 @@ special['if'] = (args, env) => {
     }
 }
 
+special['func'] = (args, env) => {
+    const newEnv = Object.create(env);
+    env[args[0].name] = () => evaluate(args[1], newEnv);
+}
+
 const stringRegex = /^"([^"]*)"/;
 const numberRegex = /^\d+/;
 const wordRegex = /^[^\s{}(),]+/;
@@ -169,7 +174,17 @@ while(<=(i, 5), {
 `);
 
 run(`
-if(<=(1,0), { print("1<=0") })
-if(<=(0,1), { print("0<=1") })
+if(<=(1,0), { print("1 <= 0") })
+if(<=(0,1), { print("0 <= 1") })
 if(<=(1,0), { print("haha") }, { print("hoho") })
+`);
+
+run(`
+put(a, 5)
+func(haha, {
+put(a, 6)
+print(a)
+})
+haha()
+print(a)
 `);
