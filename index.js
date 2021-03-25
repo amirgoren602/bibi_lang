@@ -1,30 +1,60 @@
 const topEnv = Object.create(null);
-const special = Object.create(null);
+const specialForms = Object.create(null);
 
 topEnv['print'] = (...args) => console.log(...args);
-topEnv['<='] = (a, b) => a <= b;
-topEnv['+'] = (a, b) => a + b;
 
-special[''] = (args, env) => { args.forEach(arg => evaluate(arg, env)); }
-special['put'] = (args, env) => {
+[
+'+',
+'-',
+'*',
+'/',
+'%',
+'==',
+'!=',
+'<',
+'<=',
+'>',
+'>=',
+].forEach(operator => {
+    topEnv[operator] = new Function('a', 'b', `return a ${ operator } b;`);
+});
+
+topEnv['true'] = true;
+topEnv['false'] = false;
+topEnv['null'] = null;
+topEnv['undefined'] = undefined;
+
+specialForms[''] = (args, env) => {
+    let value = null;
+    args.forEach(arg => { value = evaluate(arg, env); });
+    return value;
+}
+
+specialForms['put'] = (args, env) => {
     if (args.length !== 2) {
-        throw new SyntaxError();
+        throw new SyntaxError('Incorrect call to put');
+    }
+    if (args[0].type !== 'word') {
+        throw new SyntaxError('Incorrect first argument to put');
     }
     const val = evaluate(args[1], env);
     env[args[0].name] = val;
     return val;
 }
-special['while'] = (args, env) => {
+
+specialForms['while'] = (args, env) => {
     if (args.length !== 2) {
-        throw new SyntaxError();
+        throw new SyntaxError('Incorrect call to while');
     }
     while (evaluate(args[0], env)) {
         evaluate(args[1], env);
     }
+    return null;
 }
-special['if'] = (args, env) => {
+
+specialForms['if'] = (args, env) => {
     if (args.length !== 2 && args.length !== 3) {
-        throw new SyntaxError();
+        throw new SyntaxError('Incorrect call to if');
     }
     const [condition, ifDo, elseDo] = args;
     const value = evaluate(condition, env);
@@ -33,12 +63,27 @@ special['if'] = (args, env) => {
     } else if (elseDo) {
         evaluate(elseDo, env);
     }
+    return null;
 }
 
-special['func'] = (args, env) => {
-    env[args[0].name] = () => {
+specialForms['func'] = (args, env) => {
+    if (args.length < 2) {
+        throw new SyntaxError();
+    }
+
+    const name = args.shift();
+    const body = args.pop();
+
+    if (name.type !== 'word') {
+        throw new SyntaxError('Incorrect first argument to func');
+    }
+
+    env[name.name] = (...params) => {
         const newEnv = Object.create(env);
-        evaluate(args[1], newEnv);
+        for (let i = 0; i < args.length; i++) {
+            newEnv[args[i].name] = i < params.length ? params[i] : undefined;
+        }
+        return evaluate(body, newEnv);
     }
 }
 
@@ -75,40 +120,38 @@ function parseApply(expr, rest) {
         return { expression: expr, rest: rest };
     }
 
-    let closer;
-    if (rest[0] === '{') {
-        closer = '}';
-    } else {
-        closer = ')';
-    }
-
     const expression = { type: 'apply', operator: expr, args: [] };
 
-    rest = removeWhitespace(rest.slice(1));
-
-    if (closer === '}') {
-        while (rest[0] !== '}') {
-            const arg = parseExpression(rest);
-            expression.args.push(arg.expression);
-            rest = removeWhitespace(arg.rest);
-        }
-        return parseApply(expression, rest.slice(1));
+    if (rest[0] === '{') {
+        return parseBraces(expression, removeWhitespace(rest.slice(1)));
     }
 
-    if (closer === ')') {
-        while (rest[0] !== ')') {
-            const arg = parseExpression(rest);
-            expression.args.push(arg.expression);
-            rest = removeWhitespace(arg.rest);
-            if (rest[0] === ',') {
-                rest = removeWhitespace(rest.slice(1));
-            } else if (rest[0] !== ')') {
-                console.log(rest);
-                throw new SyntaxError();
-            }
-        }
-        return parseApply(expression, rest.slice(1));
+    if (rest[0] === '(') {
+        return parseParentheses(expression, removeWhitespace(rest.slice(1)));
     }
+}
+
+function parseBraces(expression, rest) {
+    while (rest[0] !== '}') {
+        const arg = parseExpression(rest);
+        expression.args.push(arg.expression);
+        rest = removeWhitespace(arg.rest);
+    }
+    return parseApply(expression, rest.slice(1));
+}
+
+function parseParentheses(expression, rest) {
+    while (rest[0] !== ')') {
+        const arg = parseExpression(rest);
+        expression.args.push(arg.expression);
+        rest = removeWhitespace(arg.rest);
+        if (rest[0] === ',') {
+            rest = removeWhitespace(rest.slice(1));
+        } else if (rest[0] !== ')') {
+            throw new SyntaxError();
+        }
+    }
+    return parseApply(expression, rest.slice(1));
 }
 
 function evaluate(expression, env) {
@@ -124,8 +167,8 @@ function evaluate(expression, env) {
             }
             break;
         case "apply":
-            if (expression.operator.type === "word" && expression.operator.name in special) {
-                return special[expression.operator.name](expression.args, env);
+            if (expression.operator.type === "word" && expression.operator.name in specialForms) {
+                return specialForms[expression.operator.name](expression.args, env);
             }
 
             const op = evaluate(expression.operator, env);
@@ -150,6 +193,10 @@ function run(code) {
     const parsed = parse(`{ ${ code } }`);
     return evaluate(parsed, env);
 }
+
+run(`
+print(1)
+`);
 
 run(`
 put(sum, 0)
@@ -178,15 +225,10 @@ while(<=(i, 5), {
 run(`
 if(<=(1,0), { print("1 <= 0") })
 if(<=(0,1), { print("0 <= 1") })
-if(<=(1,0), { print("haha") }, { print("hoho") })
+if(<=(1,0), { print("condition is true") }, { print("condition is false") })
 `);
 
 run(`
-put(a, 5)
-func(haha, {
-put(a, 6)
-print(a)
-})
-haha()
-print(a)
+func(haha, msg, { print(msg) })
+haha("hello, world!")
 `);
